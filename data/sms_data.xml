@@ -1,0 +1,40 @@
+<?xml version="1.0" ?>
+<odoo>
+    <data noupdate="1">
+        <record id="sms_template_data_invoice_sent" model="sms.template">
+            <field name="name">Invoice sent: Alert by SMS Text Message</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="body">
+                Babur: ${object.partner_id.name.split()[0]}, o boleto da sua locacao ja esta disponivel no seu e-mail e em nossos canais digitais.
+            </field>
+        </record>
+        <record id="sms_template_data_invoice_due_date" model="sms.template">
+            <field name="name">Invoice due date: Alert by SMS Text Message</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="body">
+                Babur: ${object.partner_id.name.split()[0]}, tem boleto vencendo hoje. Evite juros e multas pagando em dia!
+            </field>
+        </record>
+        <record id="sms_template_data_invoice_overdue_1" model="sms.template">
+            <field name="name">Invoice overdue d+1: Alert by SMS Text Message</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="body">
+                Babur: ${object.partner_id.name.split()[0]}, parece que tem boleto atrasado na sua locacao. Se voce ja efetuou o pagamento, desconsidere este aviso.
+            </field>
+        </record>
+        <record id="sms_template_data_invoice_overdue_2" model="sms.template">
+            <field name="name">Invoice overdue d+2: Alert by SMS Text Message</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="body">
+                Babur: ${object.partner_id.name.split()[0]}, parece que sua locacao esta vencida. Regularize seus pagamentos e evite o bloqueio do veiculo.
+            </field>
+        </record>
+        <record id="sms_template_data_invoice_overdue_3" model="sms.template">
+            <field name="name">Invoice overdue d+3: Alert by SMS Text Message</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="body">
+                Babur: ${object.partner_id.name.split()[0]}, sua locacao esta vencida. Regularize seus pagamentos para liberacao do veiculo.
+            </field>
+        </record>
+    </data>
+</odoo>
