@@ -13,6 +13,22 @@ _logger = logging.getLogger(__name__)
 class AccountMove(models.Model):
     _inherit = 'account.move'
 
+
+    payment_promise = fields.Datetime(string='Payment Promise', help="Date and time of payment promise")
+
+    def _active_payment_promise(self):
+        if not self.payment_promise:
+            return False
+        elif self.payment_promise < datetime.now():
+            return False
+        return True
+
+    def _create_payment_promise(self):
+        payment_promise_date = datetime.now() + timedelta(hours=24)
+        self.write({
+            'payment_promise': payment_promise_date
+        })
+
     def _batch_block_vehicle_w_invoice_overdue(self):
 
         _logger.info(f"################ inicio do teste*********")
@@ -38,7 +54,7 @@ class AccountMove(models.Model):
         for move in self:
             _logger.info(f"################ move {move}")
 
-            if move.type == 'out_invoice' and move.state == 'posted' and move.invoice_payment_state == 'not_paid':
+            if move.type == 'out_invoice' and move.state == 'posted' and move.invoice_payment_state == 'not_paid' and not self._active_payment_promise() :
                 dias_atraso = 0
                 dia = data_atual
                 while dia > move.invoice_date_due:
