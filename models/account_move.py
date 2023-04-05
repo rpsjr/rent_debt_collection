@@ -62,7 +62,7 @@ class AccountMove(models.Model):
                         dias_atraso += 1
                     dia -= timedelta(days=1)
 
-                if dias_atraso >= 2:
+                if dias_atraso > 2:
                     
                         # Envia o comando de bloqueio do veículo do cliente
                         vehicles = self.env['fleet.vehicle'].search([('driver_id', '=', move.partner_id.id)])
