@@ -101,7 +101,7 @@ class AccountMove(models.Model):
             "account_sms.sms_template_data_invoice_sent",
             [
                 ("type", "=", "out_invoice"),
-                ('invoice_payment_state', '=', 'not_paid')
+                ('invoice_payment_state', '=', 'not_paid'),
                 ("state", "=", "posted"),
                 (
                     "invoice_date_due",
