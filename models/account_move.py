@@ -98,7 +98,7 @@ class AccountMove(models.Model):
     def _do_sms_reminder(self):
         ### Invoice sent: Alert by SMS Text Message
         self._reusable_sms_call(
-            "account_sms.sms_template_data_invoice_sent",
+            "rent_debt_collection.sms_template_data_invoice_sent",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
@@ -112,7 +112,7 @@ class AccountMove(models.Model):
         )
         ### Invoice due date: Alert by SMS Text Message
         self._reusable_sms_call(
-            "account_sms.sms_template_data_invoice_due_date",
+            "rent_debt_collection.sms_template_data_invoice_due_date",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
@@ -122,7 +122,7 @@ class AccountMove(models.Model):
         )
         ### Invoice overdue d+1: Alert by SMS Text Message
         self._reusable_sms_call(
-            "account_sms.sms_template_data_invoice_overdue_1",
+            "rent_debt_collection.sms_template_data_invoice_overdue_1",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
@@ -136,7 +136,7 @@ class AccountMove(models.Model):
         )
         ### Invoice overdue d+2: Alert by SMS Text Message
         self._reusable_sms_call(
-            "account_sms.sms_template_data_invoice_overdue_2",
+            "rent_debt_collection.sms_template_data_invoice_overdue_2",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
@@ -150,7 +150,7 @@ class AccountMove(models.Model):
         )
         ### Invoice overdue d+3: Alert by SMS Text Message
         self._reusable_sms_call(
-            "account_sms.sms_template_data_invoice_overdue_3",
+            "rent_debt_collection.sms_template_data_invoice_overdue_3",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
