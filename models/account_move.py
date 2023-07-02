@@ -148,7 +148,7 @@ class AccountMove(models.Model):
                 ),
             ],
         )
-        ### Invoice overdue d+3: Alert by SMS Text Message
+        ### Invoice overdue d-3 to d-8: Alert by SMS Text Message
         self._reusable_sms_call(
             "rent_debt_collection.sms_template_data_invoice_overdue_3",
             [
@@ -159,6 +159,11 @@ class AccountMove(models.Model):
                     "invoice_date_due",
                     "<=",
                     fields.Datetime.now().date() - timedelta(days=3),
+                ),
+                (
+                    "invoice_date_due",
+                    ">",
+                    fields.Datetime.now().date() - timedelta(days=9),
                 ),
             ],
         )
