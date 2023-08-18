@@ -45,6 +45,9 @@ class AccountMove(models.Model):
             ]
         for move in self.search(invoice_filters):
             move._block_vehicle_w_invoice_overdue()
+            # Commit the changes to the database
+            self.env.cr.commit()
+
 
     def _block_vehicle_w_invoice_overdue(self):
         data_atual = datetime.now().date()
