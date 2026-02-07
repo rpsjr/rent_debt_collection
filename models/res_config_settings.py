@@ -17,3 +17,17 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='fleet.traccar_api_key',
         help='Chave de acesso à API do Traccar'
     )
+    
+    fleet_block_start_hour = fields.Float(
+        string='Inicio do Bloqueio (Hora)',
+        config_parameter='fleet.block_start_hour',
+        default=6.0,
+        help='Hora do dia (0-23) a partir da qual o bloqueio de veículos inadimplentes é permitido.'
+    )
+
+    fleet_block_end_hour = fields.Float(
+        string='Fim do Bloqueio (Hora)',
+        config_parameter='fleet.block_end_hour',
+        default=18.0,
+        help='Hora do dia (0-23) até a qual o bloqueio de veículos inadimplentes é permitido.'
+    )

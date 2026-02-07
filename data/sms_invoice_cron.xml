@@ -21,4 +21,15 @@
     <field name="doall" eval="False" />
     <field name="model_id" ref="model_account_move"/>
   </record>
+  
+  <record id="unlock_vehicle_clean_record" model="ir.cron">
+    <field name="name">Rent Debt Collect: Unlock Vehicles</field>
+    <field name="state">code</field>
+    <field name="code">model._batch_unlock_vehicle_clean_record()</field>
+    <field name="interval_number">20</field>
+    <field name="interval_type">minutes</field>
+    <field name="numbercall">-1</field>
+    <field name="doall" eval="False" />
+    <field name="model_id" ref="model_account_move"/>
+  </record>
 </odoo>
