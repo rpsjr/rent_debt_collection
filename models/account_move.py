@@ -31,12 +31,17 @@ class AccountMove(models.Model):
     
     def _is_recidivist(self):
         """
-        Verifica se o parceiro (motorista) é reincidente em atrasos nos últimos 28 dias.
-        Critério: Ter outra fatura que venceu nos últimos 28 dias (antes da fatura atual)
+        Verifica se o parceiro (motorista) é reincidente em atrasos nos últimos N dias (configurável).
+        Critério: Ter outra fatura que venceu no período configurado (antes da fatura atual)
         que esteja em aberto (não paga) OU que tenha sido paga com atraso.
         """
-        # Janela de análise: 28 dias antes do vencimento desta fatura
-        start_check_date = self.invoice_date_due - timedelta(days=28)
+        
+        # Get configured recidivism window or use default 28 days
+        ICP = self.env['ir.config_parameter'].sudo()
+        recidivism_days = int(ICP.get_param('fleet.recidivism_window_days', default=28))
+
+        # Janela de análise: N dias antes do vencimento desta fatura
+        start_check_date = self.invoice_date_due - timedelta(days=recidivism_days)
         
         domain = [
             ('id', '!=', self.id), # Não conta a si mesma
@@ -116,16 +121,20 @@ class AccountMove(models.Model):
         # Define o calendário de feriados no Brasil
         feriados = Brazil().holidays(data_atual.year)
 
+        # Get configured tolerance days or use default 2 days
+        ICP = self.env['ir.config_parameter'].sudo()
+        default_tolerance_days = int(ICP.get_param('fleet.block_tolerance_days', default=2))
+
         for move in self:
             _logger.info(f"################ move {move}")
 
             if move.type == 'out_invoice' and move.state == 'posted' and move.invoice_payment_state == 'not_paid' and not self._active_payment_promise() :
                 
                 # Regra dinâmica de tolerância
-                # Se for reincidente (atrasou nos últimos 28 dias), tolerância é 0 dias.
-                # Se não for reincidente, mantém tolerância de 2 dias úteis.
+                # Se for reincidente (atrasou nos últimos N dias), tolerância é 0 dias.
+                # Se não for reincidente, mantém tolerância configurada (default 2 dias úteis).
                 is_recidivist = move._is_recidivist()
-                tolerance_days = 0 if is_recidivist else 2
+                tolerance_days = 0 if is_recidivist else default_tolerance_days
                 
                 _logger.info(f"Move {move.id}: Recidivist={is_recidivist}, Tolerance={tolerance_days} days")
 
@@ -143,22 +152,42 @@ class AccountMove(models.Model):
                         _logger.info(f"################ vehicles {vehicles}")
                         if vehicles:
                             for vehicle in vehicles:
-                                vehicle.tracker_device.stop_engine()
+                                # Otimização: Só tenta bloquear se o estado atual não for 'blocked'
+                                if vehicle.tracker_device and vehicle.tracker_device.engine_last_cmd != 'blocked':
+                                    try:
+                                        response = vehicle.tracker_device.stop_engine()
+                                        if response:
+                                            # Log no Chatter do Veículo
+                                            vehicle.message_post(body=_("Veículo bloqueado automaticamente por inadimplência (Fatura %s). Dias de atraso: %s (Reincidente: %s)") % (move.name, dias_atraso, is_recidivist))
+                                            # Log no Chatter da Fatura
+                                            move.message_post(body=_("Comando de bloqueio enviado para o veículo %s devido a atraso > %s dias.") % (vehicle.license_plate, tolerance_days))
+                                    except Exception as e:
+                                        _logger.error(f"Erro ao bloquear veículo {vehicle.license_plate}: {e}")
+
     
     def _batch_unlock_vehicle_clean_record(self):
         """
         Desbloqueia veículos cujos motoristas não possuem mais faturas vencidas em aberto.
-        Esta função deve rodar periodicamente (ex: a cada 30min ou 1h).
+        Esta função deve rodar periodicamente (ex: a cada 20min).
+        Otimização: Busca apenas veículos marcados como 'blocked' no tracker.
         """
-        _logger.info("Starting _batch_unlock_vehicle_clean_record...")
+        _logger.info("Starting _batch_unlock_vehicle_clean_record (Optimized)...")
         
-        # 1. Busca todos os veículos que estão vinculados a algum motorista
-        all_vehicles = self.env['fleet.vehicle'].search([('driver_id', '!=', False)])
+        # 1. Busca apenas veículos que estão marcados como bloqueados e vinculados a motorista
+        # Isso reduz drasticamente a busca no banco de dados
+        blocked_vehicles = self.env['fleet.vehicle'].search([
+            ('driver_id', '!=', False),
+            ('tracker_device.engine_last_cmd', '=', 'blocked')
+        ])
         
-        for vehicle in all_vehicles:
+        if not blocked_vehicles:
+            _logger.info("No blocked vehicles found to check.")
+            return
+
+        for vehicle in blocked_vehicles:
             partner = vehicle.driver_id
             
-            # 2. Verifica se o parceiro tem faturas vencidas em aberto
+            # 2. Verifica se o parceiro AINDA tem faturas vencidas em aberto
             # Critério: Fatura Posted, Not Paid, e Data Vencimento < Hoje
             
             overdue_invoices_count = self.env['account.move'].search_count([
@@ -173,13 +202,16 @@ class AccountMove(models.Model):
             if overdue_invoices_count == 0:
                 try:
                     if vehicle.tracker_device:
-                         # Corrigido: chama resume_engine() em vez de start_engine()
-                         vehicle.tracker_device.resume_engine()
-                         # _logger.info(f"Vehicle {vehicle.license_plate} (Driver: {partner.name}) unlocked/engine started - No overdue invoices.")
+                         response = vehicle.tracker_device.resume_engine()
+                         
+                         if response:
+                             # Log no Chatter do Veículo
+                             vehicle.message_post(body=_("Veículo desbloqueado automaticamente. Cliente regularizou pendências financeiras."))
+                         
                 except Exception as e:
                     _logger.error(f"Error unlocking vehicle {vehicle.license_plate}: {str(e)}")
             
-            # Commit a cada iteração para evitar locks longos se houver muitos veículos
+            # Commit a cada iteração para evitar locks longos
             self.env.cr.commit()
 
     def _confirmation_sms_account_template(self, template_xmlid):
@@ -188,28 +220,44 @@ class AccountMove(models.Model):
         except ValueError:
             return False
 
-    def _reusable_sms_call(self, template_xmlid, invoice_filters):
-        """Send an SMS text reminder to custumers pay invoices"""
+    def _reusable_sms_call(self, template_xmlid, invoice_filters, filter_recidivists=None):
+        """
+        Send an SMS text reminder to custumers pay invoices.
+        
+        filter_recidivists (bool): 
+            If True, send only to recidivists.
+            If False, send only to good payers.
+            If None (default), send to all.
+        """
 
         template_id = self._confirmation_sms_account_template(template_xmlid)
         invoices = self.search(invoice_filters) or None
+        
         if invoices:
             for posted_invoice in invoices:
+                
+                # Check recidivism if filter is applied
+                if filter_recidivists is not None:
+                    # Precisamos chamar o metodo na instância da invoice
+                    is_recidivist = posted_invoice._is_recidivist()
+                    
+                    if filter_recidivists and not is_recidivist:
+                        continue # Queria apenas reincidentes, mas este não é. Pula.
+                    
+                    if not filter_recidivists and is_recidivist:
+                        continue # Queria apenas bons pagadores, mas este é reincidente. Pula.
+
                 posted_invoice._message_sms_with_template(
                     template=template_id,
-                    # template_xmlid="account_move.sms_template_data_invoice_sent",
-                    # template_fallback=_("Event reminder: %s, %s.")
-                    #% (posted_invoice.name, posted_invoice.partner_id.name),
-                    # partner_ids=self._sms_get_default_partners().ids,
                     partner_ids=[posted_invoice.partner_id.id],
                     put_in_queue=False,
                 )
                 
 
     def _do_sms_reminder(self):
-        ### Invoice sent: Alert by SMS Text Message
+        # 1. D-1 (Amanhã): Apenas para Reincidentes (Aviso de Bloqueio Iminente)
         self._reusable_sms_call(
-            "rent_debt_collection.sms_template_data_invoice_sent",
+            "rent_debt_collection.sms_template_data_invoice_pre_due_bad",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
@@ -217,23 +265,43 @@ class AccountMove(models.Model):
                 (
                     "invoice_date_due",
                     "=",
-                    fields.Datetime.now().date() - timedelta(days=3),
+                    fields.Datetime.now().date() + timedelta(days=1),
                 ),
             ],
+            filter_recidivists=True # Only Bad Payers
         )
-        ### Invoice due date: Alert by SMS Text Message
+        
+        # 2. D+0 (Hoje): Vencimento
+        
+        # 2a. Bom Pagador: Lembrete amigável
         self._reusable_sms_call(
-            "rent_debt_collection.sms_template_data_invoice_due_date",
+            "rent_debt_collection.sms_template_data_invoice_due_date_good",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
                 ("state", "=", "posted"),
                 ("invoice_date_due", "=", fields.Datetime.now().date()),
             ],
+            filter_recidivists=False # Only Good Payers
         )
-        ### Invoice overdue d+1: Alert by SMS Text Message
+        
+        # 2b. Reincidente: Aviso de bloqueio amanhã
         self._reusable_sms_call(
-            "rent_debt_collection.sms_template_data_invoice_overdue_1",
+            "rent_debt_collection.sms_template_data_invoice_due_date_bad",
+            [
+                ("type", "=", "out_invoice"),
+                ('invoice_payment_state', '=', 'not_paid'),
+                ("state", "=", "posted"),
+                ("invoice_date_due", "=", fields.Datetime.now().date()),
+            ],
+            filter_recidivists=True # Only Bad Payers
+        )
+        
+        # 3. D+1 (Atraso)
+        
+        # 3a. Bom Pagador: Aviso de atraso (bloqueio em D+3)
+        self._reusable_sms_call(
+            "rent_debt_collection.sms_template_data_invoice_overdue_1_good",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
@@ -244,10 +312,14 @@ class AccountMove(models.Model):
                     fields.Datetime.now().date() - timedelta(days=1),
                 ),
             ],
+            filter_recidivists=False # Only Good Payers
         )
-        ### Invoice overdue d+2: Alert by SMS Text Message
+        
+        # 4. D+2 (Pré-bloqueio)
+        
+        # 4a. Bom Pagador: Aviso final antes do bloqueio em D+3
         self._reusable_sms_call(
-            "rent_debt_collection.sms_template_data_invoice_overdue_2",
+            "rent_debt_collection.sms_template_data_invoice_overdue_2_good",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),
@@ -258,10 +330,15 @@ class AccountMove(models.Model):
                     fields.Datetime.now().date() - timedelta(days=2),
                 ),
             ],
+            filter_recidivists=False # Only Good Payers
         )
-        ### Invoice overdue d-3 to d-8: Alert by SMS Text Message
+        
+        # 5. D > 2 ou Bloqueados (Geral)
+        # Envia aviso de "Bloqueado / Regularize" para todos os atrasados acima de 2 dias
+        # ou reincidentes que já passaram do prazo (D+1 em diante)
+        # Para simplificar, usamos a lógica antiga para D-3 a D-8, mas usando o template bloqueado
         self._reusable_sms_call(
-            "rent_debt_collection.sms_template_data_invoice_overdue_3",
+            "rent_debt_collection.sms_template_data_invoice_overdue_blocked",
             [
                 ("type", "=", "out_invoice"),
                 ('invoice_payment_state', '=', 'not_paid'),

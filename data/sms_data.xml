@@ -1,40 +1,48 @@
 <?xml version="1.0" ?>
 <odoo>
     <data noupdate="1">
-        <record id="sms_template_data_invoice_sent" model="sms.template">
-            <field name="name">Invoice sent: Alert by SMS Text Message</field>
+        <!-- REMOVIDO: sms_template_data_invoice_sent (D-3) -->
+        
+        <!-- D-1: Apenas para Reincidentes (Aviso de Bloqueio Antecipado) -->
+        <record id="sms_template_data_invoice_pre_due_bad" model="sms.template">
+            <field name="name">Invoice D-1 Bad Payer: Alert by SMS</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="body">
-                Babur: ${object.partner_id.name.split()[0]}, o boleto da sua locacao ja esta disponivel no seu e-mail e em nossos canais digitais.
-            </field>
+            <field name="body">Babur: ${object.partner_id.name.split()[0]}, boleto vence amanha. Evite o bloqueio imediato do veiculo pagando em dia.</field>
         </record>
-        <record id="sms_template_data_invoice_due_date" model="sms.template">
-            <field name="name">Invoice due date: Alert by SMS Text Message</field>
+
+        <!-- D+0: Vencimento Hoje (Bom Pagador) -->
+        <record id="sms_template_data_invoice_due_date_good" model="sms.template">
+            <field name="name">Invoice Due Date Good Payer: Alert by SMS</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="body">
-                Babur: ${object.partner_id.name.split()[0]}, tem boleto vencendo hoje. Evite juros e multas pagando em dia!
-            </field>
+            <field name="body">Babur: ${object.partner_id.name.split()[0]}, seu boleto vence hoje. Evite juros e multas pagando em dia!</field>
         </record>
-        <record id="sms_template_data_invoice_overdue_1" model="sms.template">
-            <field name="name">Invoice overdue d+1: Alert by SMS Text Message</field>
+
+        <!-- D+0: Vencimento Hoje (Reincidente - Bloqueio Iminente) -->
+        <record id="sms_template_data_invoice_due_date_bad" model="sms.template">
+            <field name="name">Invoice Due Date Bad Payer: Alert by SMS</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="body">
-                Babur: ${object.partner_id.name.split()[0]}, parece que tem boleto atrasado na sua locacao. Se voce ja efetuou o pagamento, desconsidere este aviso.
-            </field>
+            <field name="body">Babur: ${object.partner_id.name.split()[0]}, boleto vence hoje. O nao pagamento pode causar bloqueio do veiculo amanha.</field>
         </record>
-        <record id="sms_template_data_invoice_overdue_2" model="sms.template">
-            <field name="name">Invoice overdue d+2: Alert by SMS Text Message</field>
+
+        <!-- D+1: Atraso (Bom Pagador) -->
+        <record id="sms_template_data_invoice_overdue_1_good" model="sms.template">
+            <field name="name">Invoice Overdue D+1 Good Payer: Alert by SMS</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="body">
-                Babur: ${object.partner_id.name.split()[0]}, parece que sua locacao esta vencida. Regularize seus pagamentos e evite o bloqueio do veiculo.
-            </field>
+            <field name="body">Babur: ${object.partner_id.name.split()[0]}, nao identificamos seu pagamento. Regularize para evitar bloqueio em 48h.</field>
         </record>
-        <record id="sms_template_data_invoice_overdue_3" model="sms.template">
-            <field name="name">Invoice overdue d+3: Alert by SMS Text Message</field>
+
+        <!-- D+2: Atraso Crítico (Bom Pagador - Aviso de Bloqueio para D+3) -->
+        <record id="sms_template_data_invoice_overdue_2_good" model="sms.template">
+            <field name="name">Invoice Overdue D+2 Good Payer: Alert by SMS</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="body">
-                Babur: ${object.partner_id.name.split()[0]}, sua locacao esta vencida. Regularize seus pagamentos para liberacao do veiculo.
-            </field>
+            <field name="body">Babur: ${object.partner_id.name.split()[0]}, ultimo aviso. Regularize seu debito hoje para evitar o bloqueio do veiculo.</field>
+        </record>
+        
+        <!-- Bloqueado / Atraso Geral -->
+        <record id="sms_template_data_invoice_overdue_blocked" model="sms.template">
+            <field name="name">Invoice Overdue Blocked: Alert by SMS</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="body">Babur: ${object.partner_id.name.split()[0]}, sua locacao esta vencida. Regularize seus pagamentos para liberacao do veiculo.</field>
         </record>
     </data>
 </odoo>

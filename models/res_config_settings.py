@@ -31,3 +31,17 @@ class ResConfigSettings(models.TransientModel):
         default=18.0,
         help='Hora do dia (0-23) até a qual o bloqueio de veículos inadimplentes é permitido.'
     )
+
+    fleet_recidivism_window_days = fields.Integer(
+        string='Janela de Reincidência (Dias)',
+        config_parameter='fleet.recidivism_window_days',
+        default=28,
+        help='Número de dias anteriores ao vencimento para verificar histórico de atrasos.'
+    )
+
+    fleet_block_tolerance_days = fields.Integer(
+        string='Tolerância de Bloqueio (Dias)',
+        config_parameter='fleet.block_tolerance_days',
+        default=2,
+        help='Dias de carência após o vencimento antes do bloqueio para bons pagadores.'
+    )
