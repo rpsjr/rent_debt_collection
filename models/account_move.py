@@ -218,3 +218,88 @@ class AccountMove(models.Model):
 
             except Exception as e:
                 _logger.error(f"Erro ao bloquear veículo {vehicle.license_plate} (Fatura {self.id}): {e}")
+
+    def _batch_unlock_vehicle_clean_record(self):
+        """
+        Itera sobre veículos bloqueados, verifica as faturas do motorista
+        e desbloqueia se não houver mais pendências financeiras.
+        """
+        _logger.info("Starting batch vehicle unlock check...")
+
+        # 1. Busca veículos que estão atualmente bloqueados
+        blocked_vehicles = self.env['fleet.vehicle'].search([
+            ('tracker_device', '!=', False),
+            ('tracker_device.engine_last_cmd', '=', 'blocked')
+        ])
+
+        _logger.info(f"Found {len(blocked_vehicles)} blocked vehicles to evaluate for unblock.")
+
+        for vehicle in blocked_vehicles:
+            driver = vehicle.driver_id
+            if not driver:
+                continue
+            
+            # 2. Busca todas as faturas em aberto do motorista
+            overdue_invoices = self.env['account.move'].search([
+                ('partner_id', '=', driver.id),
+                ('type', '=', 'out_invoice'),
+                ('state', '=', 'posted'),
+                ('invoice_payment_state', '=', 'not_paid'),
+            ])
+            
+            # 3. Força a verificação de pagamento no gateway para cada fatura em aberto
+            for move in overdue_invoices:
+                transactions = move.transaction_ids.filtered(
+                    lambda t: t.state not in ('cancel', 'error')
+                )
+                for tx in transactions:
+                    try:
+                        # Chama o método de verificação de transação (Inter/Gateway)
+                        tx.action_verify_transaction()
+                        # Commit imediato para atualizar o status da fatura/transação no banco
+                        self.env.cr.commit()
+                    except Exception as e:
+                        self.env.cr.rollback()
+                        _logger.error(f"Error verifying transaction {tx.id} for move {move.id}: {e}")
+
+            # 4. Avalia se o motorista ainda possui faturas que justificam o bloqueio
+            # Invalida o cache para ler os estados atualizados após action_verify_transaction
+            overdue_invoices.invalidate_cache()
+            
+            still_has_blocking_debt = False
+            for move in overdue_invoices:
+                # Se a fatura foi paga ou tem promessa ativa, ela não mantém o bloqueio
+                if move.invoice_payment_state == 'paid' or move._active_payment_promise():
+                    continue
+
+                # Verifica a tolerância de dias úteis
+                ICP = self.env['ir.config_parameter'].sudo()
+                default_tolerance = int(ICP.get_param('fleet.block_tolerance_days', default=2))
+                is_recidivist = move._is_recidivist()
+                tolerance_days = 0 if is_recidivist else default_tolerance
+
+                cal = Brazil()
+                today = fields.Date.context_today(self)
+                days_overdue = 0
+                check_date = today
+                while check_date > move.invoice_date_due:
+                    if cal.is_working_day(check_date):
+                        days_overdue += 1
+                    check_date -= timedelta(days=1)
+                
+                if days_overdue > tolerance_days:
+                    # Encontrou pelo menos uma fatura que justifica manter o bloqueio
+                    still_has_blocking_debt = True
+                    break
+
+            # 5. Se não houver mais débitos impeditivos, envia o comando de desbloqueio
+            if not still_has_blocking_debt:
+                try:
+                    _logger.info(f"Unblocking vehicle {vehicle.license_plate} for driver {driver.name}")
+                    vehicle.tracker_device.resume_engine()
+                    
+                    vehicle.message_post(body=_("Veículo desbloqueado automaticamente: Pendências financeiras regularizadas."))
+                    self.env.cr.commit()
+                except Exception as e:
+                    self.env.cr.rollback()
+                    _logger.error(f"Error unblocking vehicle {vehicle.license_plate}: {e}")
