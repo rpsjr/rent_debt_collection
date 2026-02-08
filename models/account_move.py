@@ -22,7 +22,7 @@ class AccountMove(models.Model):
             'payment_promise': fields.Datetime.now() + timedelta(hours=24)
         })
 
-def _is_recidivist(self):
+    def _is_recidivist(self):
         """
         Verifica se o parceiro (motorista) é reincidente em atrasos nos últimos N dias.
         Considera feriados e finais de semana: Se o vencimento cair em dia não útil,
