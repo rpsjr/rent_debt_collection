@@ -32,6 +32,13 @@ class ResConfigSettings(models.TransientModel):
         help='Hora do dia (0-23) até a qual o bloqueio de veículos inadimplentes é permitido.'
     )
 
+    fleet_compensation_limit_hour = fields.Float(
+        string='Limite de Compensação (Hora)',
+        config_parameter='fleet.compensation_limit_hour',
+        default=12.0,
+        help='No primeiro dia útil após o vencimento (ou tolerância), aguarda até esta hora pela compensação bancária.'
+    )
+
     fleet_recidivism_window_days = fields.Integer(
         string='Janela de Reincidência (Dias)',
         config_parameter='fleet.recidivism_window_days',

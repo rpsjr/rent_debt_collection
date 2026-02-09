@@ -167,7 +167,6 @@ class AccountMove(models.Model):
         days_overdue = 0
         
         # Iteramos do dia atual para trás até a data de vencimento
-        # (Lógica mantida do original, apenas limpa)
         check_date = today
         while check_date > self.invoice_date_due:
             if cal.is_working_day(check_date):
@@ -176,7 +175,26 @@ class AccountMove(models.Model):
 
         _logger.info(f"Move {self.id}: Dias Atraso (Úteis)={days_overdue}, Tolerância={tolerance_days}, Reincidente={is_recidivist}")
 
-        # 5. Execução do Bloqueio
+        # 5. Margem de Segurança: Compensação Bancária
+        # Esta margem de segurança SÓ se aplica quando NÃO há tolerância de atraso (ex: reincidentes).
+        # Se o motorista já possui dias de tolerância, ele já teve tempo suficiente para a compensação.
+        if tolerance_days == 0 and days_overdue == 1:
+            compensation_limit_hour = float(ICP.get_param('fleet.compensation_limit_hour', default=12.0))
+            
+            tz_name = self.env.user.tz or 'America/Sao_Paulo'
+            local_tz = pytz.timezone(tz_name)
+            now_local = datetime.datetime.now(pytz.utc).astimezone(local_tz)
+            
+            # Converte float (ex: 12.5) para horas e minutos
+            comp_hour = int(compensation_limit_hour)
+            comp_min = int((compensation_limit_hour - comp_hour) * 60)
+            
+            # Se a hora atual local é menor que o limite, aguardamos
+            if (now_local.hour < comp_hour) or (now_local.hour == comp_hour and now_local.minute < comp_min):
+                _logger.info(f"Move {self.id}: Bloqueio adiado aguardando compensação bancária (Limite: {compensation_limit_hour}h, Agora: {now_local.strftime('%H:%M')})")
+                return
+
+        # 6. Execução do Bloqueio
         if days_overdue > tolerance_days:
             self._execute_vehicle_block(days_overdue, tolerance_days, is_recidivist)
 

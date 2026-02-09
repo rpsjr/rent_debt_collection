@@ -8,48 +8,70 @@
             <field name="inherit_id" ref="base.res_config_settings_view_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//div[@id='fleet']" position="inside">
+                    <h2>Gestão de Inadimplência e Bloqueio</h2>
                     <div class="row mt16 o_settings_container">
-                        <div class="col-12 col-lg-6 o_setting_box">
-                            <div class="o_setting_left_pane">
-                                <span class="o_form_label">Traccar API Settings</span>
-                                <div class="text-muted content-group mt16">
-                                    <span>Traccar API URL </span>
-                                    <field name="traccar_api_url"/>
-                                </div>
-                                <div class="text-muted content-group mt16">
-                                    <span>Traccar API Key </span>
-                                    <field name="traccar_api_key"/>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12 col-lg-6 o_setting_box">
-                            <div class="o_setting_left_pane">
-                                <span class="o_form_label">Horário de Bloqueio</span>
-                                <div class="text-muted content-group mt16">
-                                    <span>Início (Hora) </span>
-                                    <field name="fleet_block_start_hour" widget="float_time"/>
-                                </div>
-                                <div class="text-muted content-group mt16">
-                                    <span>Fim (Hora) </span>
-                                    <field name="fleet_block_end_hour" widget="float_time"/>
+                        
+                        <!-- API SETTINGS (Full Width for long strings) -->
+                        <div class="col-12 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Configurações de API Traccar</span>
+                                <div class="content-group">
+                                    <div class="row mt16">
+                                        <label for="traccar_api_url" class="col-lg-3 o_light_label"/>
+                                        <field name="traccar_api_url" class="col-lg-9"/>
+                                    </div>
+                                    <div class="row mt16">
+                                        <label for="traccar_api_key" class="col-lg-3 o_light_label"/>
+                                        <field name="traccar_api_key" class="col-lg-9"/>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- BLOCK HOURS -->
                         <div class="col-12 col-lg-6 o_setting_box">
-                            <div class="o_setting_left_pane">
-                                <span class="o_form_label">Régua de Reincidência</span>
-                                <div class="text-muted content-group mt16">
-                                    <span>Janela de Análise (Dias) </span>
-                                    <field name="fleet_recidivism_window_days"/>
-                                    <div class="text-muted">Período para considerar inadimplência anterior.</div>
-                                </div>
-                                <div class="text-muted content-group mt16">
-                                    <span>Tolerância Bom Pagador (Dias) </span>
-                                    <field name="fleet_block_tolerance_days"/>
-                                    <div class="text-muted">Dias de atraso tolerados para motoristas não reincidentes.</div>
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Horários de Operação (Bloqueio)</span>
+                                <div class="content-group">
+                                    <div class="row mt16">
+                                        <label for="fleet_block_start_hour" string="Início do Bloqueio" class="col-lg-6 o_light_label"/>
+                                        <field name="fleet_block_start_hour" widget="float_time"/>
+                                    </div>
+                                    <div class="row mt8">
+                                        <label for="fleet_block_end_hour" string="Fim do Bloqueio" class="col-lg-6 o_light_label"/>
+                                        <field name="fleet_block_end_hour" widget="float_time"/>
+                                    </div>
+                                    <div class="row mt8">
+                                        <label for="fleet_compensation_limit_hour" string="Limite Compensação" class="col-lg-6 o_light_label"/>
+                                        <field name="fleet_compensation_limit_hour" widget="float_time"/>
+                                    </div>
+                                    <div class="text-muted">
+                                        O sistema aguarda o limite de compensação no 1º dia de atraso real.
+                                    </div>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- TOLERANCE AND RECIDIVISM -->
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <span class="o_form_label">Régua de Tolerância</span>
+                                <div class="content-group">
+                                    <div class="row mt16">
+                                        <label for="fleet_recidivism_window_days" string="Janela Reincidência" class="col-lg-6 o_light_label"/>
+                                        <field name="fleet_recidivism_window_days"/>
+                                    </div>
+                                    <div class="row mt8">
+                                        <label for="fleet_block_tolerance_days" string="Tolerância (Dias)" class="col-lg-6 o_light_label"/>
+                                        <field name="fleet_block_tolerance_days"/>
+                                    </div>
+                                    <div class="text-muted">
+                                        Dias de carência para bons pagadores e período de análise de histórico.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </xpath>
             </field>
