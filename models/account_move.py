@@ -2,6 +2,7 @@
 import logging
 import datetime
 import pytz
+import uuid
 from datetime import timedelta
 from odoo import models, fields, api, _
 from workalendar.america.brazil import Brazil
@@ -13,30 +14,67 @@ class AccountMove(models.Model):
 
     payment_promise = fields.Datetime(string='Payment Promise', help="Date and time of payment promise")
 
+    # token used for portal access to the invoice without requiring a login
+    access_token = fields.Char('Access Token', copy=False, readonly=True)
+
+    @api.model
+    def create(self, vals):
+        # ensure each new invoice has a portal token right away
+        if 'access_token' not in vals:
+            vals['access_token'] = str(uuid.uuid4())
+        return super().create(vals)
+
+    def _ensure_access_token(self):
+        """Create a UUID token on invoice records that don't already have one."""
+        for rec in self:
+            if not rec.access_token:
+                rec.access_token = str(uuid.uuid4())
+
     def _get_payment_url(self):
         self.ensure_one()
+        # guarantee we have a token before building the link
+        self._ensure_access_token()
         base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        return "{}/my/invoices/{}".format(base_url, self.id)
+        # standard portal link with access token so external users don't need to log in
+        return f"{base_url}/my/invoices/{self.id}?access_token={self.access_token}"
 
     payment_url = fields.Char(string='Payment URL', compute='_compute_payment_url')
 
+    pix_copy_code = fields.Char(string='PIX Copy & Paste Code', compute='_compute_pix_copy_code')
+
     def _compute_payment_url(self):
+        # ensure tokens exist for all records before computing
+        self._ensure_access_token()
         for record in self:
             record.payment_url = record._get_payment_url()
+
+    def _compute_pix_copy_code(self):
+        """Determines the PIX copy-paste code to be sent in notifications."""
+        for rec in self:
+            code = ''
+            # if any related transaction carries the information, use the first one
+            for tx in rec.transaction_ids:
+                if hasattr(tx, 'pix_copy_code') and tx.pix_copy_code:
+                    code = tx.pix_copy_code
+                    break
+            # fallback: check a system parameter for a default pattern
+            if not code:
+                code = self.env['ir.config_parameter'].sudo().get_param('fleet.default_pix_copy_code', default='')
+            rec.pix_copy_code = code
 
     def _send_whatsapp_notification(self, template_xml_id, sms_fallback_xml_id=False):
         """
         Envia notificação via WhatsApp. Se falhar, tenta SMS.
         """
         self.ensure_one()
-        
+
         # 1. Tenta enviar WhatsApp
         try:
             template = self.env.ref(template_xml_id, raise_if_not_found=False)
             if template:
                 # Busca telefone móvel
                 phone = self.partner_id.mobile or self.partner_id.phone
-                
+
                 wa_msg = self.env['whatsapp.message'].create({
                     'template_id': template.id,
                     'partner_id': self.partner_id.id,
@@ -45,7 +83,7 @@ class AccountMove(models.Model):
                     'res_id': self.id,
                 })
                 wa_msg.action_send()
-                
+
                 if wa_msg.status == 'sent':
                     _logger.info("WhatsApp enviado com sucesso para %s (Template: %s)" % (self.partner_id.name, template_xml_id))
                     return True
@@ -67,7 +105,7 @@ class AccountMove(models.Model):
                     return True
             except Exception as e:
                 _logger.exception("Erro no fallback de SMS: %s" % e)
-        
+
         return False
 
     def _do_whatsapp_reminder(self):
@@ -75,7 +113,7 @@ class AccountMove(models.Model):
         Job CRON diário para enviar avisos de bloqueio iminente (24h antes).
         """
         today = fields.Date.context_today(self)
-        
+
         # Busca todas as faturas em aberto (vencidas ou vencendo hoje)
         # Otimização: filtrar apenas as que podem gerar aviso (vencimento <= hoje)
         moves = self.search([
@@ -84,7 +122,7 @@ class AccountMove(models.Model):
             ('invoice_payment_state', '=', 'not_paid'),
             ('invoice_date_due', '<=', today)
         ])
-        
+
         cal = Brazil()
         ICP = self.env['ir.config_parameter'].sudo()
         default_tolerance = int(ICP.get_param('fleet.block_tolerance_days', default=2))
@@ -97,7 +135,7 @@ class AccountMove(models.Model):
 
                 is_recidivist = move._is_recidivist()
                 tolerance_days = 0 if is_recidivist else default_tolerance
-                
+
                 # Calcula dias de atraso úteis
                 days_overdue = 0
                 check_date = today
@@ -105,16 +143,16 @@ class AccountMove(models.Model):
                     if cal.is_working_day(check_date):
                         days_overdue += 1
                     check_date -= timedelta(days=1)
-                
+
                 # Lógica de Disparo: Aviso de Bloqueio em 24h
                 # O bloqueio ocorre quando days_overdue > tolerance_days.
                 # Então o aviso deve ocorrer quando days_overdue == tolerance_days.
-                
+
                 # Exemplo Reincidente (Tol=0):
                 # Vencimento Hoje (D+0) -> days_overdue = 0.
                 # Bloqueio Amanhã (D+1) -> days_overdue = 1 ( > 0).
                 # Aviso HOJE (D+0).
-                
+
                 # Exemplo Bom Pagador (Tol=2):
                 # Vencimento (D+0).
                 # Atraso 1 (D+1).
@@ -123,19 +161,19 @@ class AccountMove(models.Model):
                 # Aviso HOJE (D+2).
 
                 should_warn = (days_overdue == tolerance_days)
-                
+
                 if should_warn:
                     # Template: rent_debt_warning_24h
                     # Fallback SMS: Escolher o template adequado baseado no perfil
                     # Reincidente (Tol=0): Envio D+0 -> Bloqueio D+1. Fallback: "Vence hoje... bloqueio amanhã"
                     # Bom Pagador (Tol=2): Envio D+2 -> Bloqueio D+3. Fallback: "Ultimo aviso... bloqueio"
                     sms_fallback = 'rent_debt_collection.sms_template_data_invoice_due_date_bad' if is_recidivist else 'rent_debt_collection.sms_template_data_invoice_overdue_2_good'
-                    
+
                     move._send_whatsapp_notification(
                         'rent_debt_collection.wa_template_rent_debt_warning_24h',
                         sms_fallback_xml_id=sms_fallback
                     )
-                    
+
             except Exception as e:
                 _logger.exception("Erro ao processar lembrete WhatsApp para fatura %s: %s" % (move.id, e))
 
@@ -154,17 +192,17 @@ class AccountMove(models.Model):
         Considera feriados e finais de semana: Se o vencimento cair em dia não útil,
         o pagamento no próximo dia útil é considerado pontual.
         """
-        
+
         # Instancia o calendário apenas uma vez para performance
         cal = Brazil()
-        
+
         # Get configured recidivism window or use default 28 days
         ICP = self.env['ir.config_parameter'].sudo()
         recidivism_days = int(ICP.get_param('fleet.recidivism_window_days', default=28))
 
         # Janela de análise: N dias antes do vencimento desta fatura
         start_check_date = self.invoice_date_due - timedelta(days=recidivism_days)
-        
+
         domain = [
             ('id', '!=', self.id), # Não conta a si mesma
             ('partner_id', '=', self.partner_id.id),
@@ -173,24 +211,24 @@ class AccountMove(models.Model):
             ('invoice_date_due', '>=', start_check_date),
             ('invoice_date_due', '<', self.invoice_date_due), # Apenas histórico passado
         ]
-        
+
         # Otimização: Search apenas nos campos necessários
         previous_invoices = self.search(domain)
-        
+
         for inv in previous_invoices:
             # 1. Se não está paga e a data de vencimento (original) já passou, é atraso certo.
             if inv.invoice_payment_state != 'paid':
                 return True
-            
+
             # 2. Se está paga, precisamos verificar QUANDO foi paga em relação ao dia útil
             reconciled_vals = inv._get_reconciled_info_JSON_values() or []
-            
+
             payment_dates = []
             for val in reconciled_vals:
                 p_date = val.get('date')
                 if p_date:
                     payment_dates.append(fields.Date.from_string(str(p_date)))
-            
+
             if payment_dates:
                 last_payment_date = max(payment_dates)
                 original_due_date = inv.invoice_date_due
@@ -201,11 +239,11 @@ class AccountMove(models.Model):
                     legal_due_date = cal.find_following_working_day(original_due_date)
                 else:
                     legal_due_date = original_due_date
-                
+
                 # Compara a data do pagamento com a data legal de vencimento
                 if last_payment_date > legal_due_date:
                     return True
-                        
+
         return False
 
     def _batch_block_vehicle_w_invoice_overdue(self):
@@ -261,7 +299,7 @@ class AccountMove(models.Model):
         Lógica individual de bloqueio. Verifica tolerância e executa o comando.
         """
         self.ensure_one()
-        
+
         # 1. Validações básicas (Guard Clauses)
         if not (self.type == 'out_invoice' and self.state == 'posted' and self.invoice_payment_state == 'not_paid'):
             return
@@ -282,7 +320,7 @@ class AccountMove(models.Model):
         # 3. Definição de Tolerância
         ICP = self.env['ir.config_parameter'].sudo()
         default_tolerance = int(ICP.get_param('fleet.block_tolerance_days', default=2))
-        
+
         is_recidivist = self._is_recidivist()
         tolerance_days = 0 if is_recidivist else default_tolerance
 
@@ -291,7 +329,7 @@ class AccountMove(models.Model):
         cal = Brazil()
         today = fields.Date.context_today(self)
         days_overdue = 0
-        
+
         # Iteramos do dia atual para trás até a data de vencimento
         check_date = today
         while check_date > self.invoice_date_due:
@@ -306,15 +344,15 @@ class AccountMove(models.Model):
         # Se o motorista já possui dias de tolerância, ele já teve tempo suficiente para a compensação.
         if tolerance_days == 0 and days_overdue == 1:
             compensation_limit_hour = float(ICP.get_param('fleet.compensation_limit_hour', default=12.0))
-            
+
             tz_name = self.env.user.tz or 'America/Sao_Paulo'
             local_tz = pytz.timezone(tz_name)
             now_local = datetime.datetime.now(pytz.utc).astimezone(local_tz)
-            
+
             # Converte float (ex: 12.5) para horas e minutos
             comp_hour = int(compensation_limit_hour)
             comp_min = int((compensation_limit_hour - comp_hour) * 60)
-            
+
             # Se a hora atual local é menor que o limite, aguardamos
             if (now_local.hour < comp_hour) or (now_local.hour == comp_hour and now_local.minute < comp_min):
                 _logger.info(f"Move {self.id}: Bloqueio adiado aguardando compensação bancária (Limite: {compensation_limit_hour}h, Agora: {now_local.strftime('%H:%M')})")
@@ -329,7 +367,7 @@ class AccountMove(models.Model):
         Método auxiliar para separar a lógica de busca e comando do rastreador.
         """
         vehicles = self.env['fleet.vehicle'].search([('driver_id', '=', self.partner_id.id)])
-        
+
         if not vehicles:
             _logger.warning(f"Move {self.id}: Nenhum veículo encontrado para o parceiro {self.partner_id.name}.")
             return
@@ -342,7 +380,7 @@ class AccountMove(models.Model):
             try:
                 _logger.info(f"Sending BLOCK command to vehicle {vehicle.license_plate}")
                 response = vehicle.tracker_device.stop_engine()
-                
+
                 if response:
                     # Log no Veículo
                     msg_vehicle = _(
@@ -388,7 +426,7 @@ class AccountMove(models.Model):
             driver = vehicle.driver_id
             if not driver:
                 continue
-            
+
             # 2. Busca todas as faturas em aberto do motorista
             overdue_invoices = self.env['account.move'].search([
                 ('partner_id', '=', driver.id),
@@ -396,7 +434,7 @@ class AccountMove(models.Model):
                 ('state', '=', 'posted'),
                 ('invoice_payment_state', '=', 'not_paid'),
             ])
-            
+
             # 3. Força a verificação de pagamento no gateway para cada fatura em aberto
             for move in overdue_invoices:
                 transactions = move.transaction_ids.filtered(
@@ -415,7 +453,7 @@ class AccountMove(models.Model):
             # 4. Avalia se o motorista ainda possui faturas que justificam o bloqueio
             # Invalida o cache para ler os estados atualizados após action_verify_transaction
             overdue_invoices.invalidate_cache()
-            
+
             still_has_blocking_debt = False
             for move in overdue_invoices:
                 # Se a fatura foi paga ou tem promessa ativa, ela não mantém o bloqueio
@@ -436,7 +474,7 @@ class AccountMove(models.Model):
                     if cal.is_working_day(check_date):
                         days_overdue += 1
                     check_date -= timedelta(days=1)
-                
+
                 if days_overdue > tolerance_days:
                     # Encontrou pelo menos uma fatura que justifica manter o bloqueio
                     still_has_blocking_debt = True
@@ -447,16 +485,16 @@ class AccountMove(models.Model):
                 try:
                     _logger.info(f"Unblocking vehicle {vehicle.license_plate} for driver {driver.name}")
                     vehicle.tracker_device.resume_engine()
-                    
+
                     vehicle.message_post(body=_("Veículo desbloqueado automaticamente: Pendências financeiras regularizadas."))
-                    
+
                     # Notificação de Desbloqueio
                     # Busca a fatura mais recente para usar como contexto de envio
                     last_invoice = self.env['account.move'].search([
                         ('partner_id', '=', driver.id),
                         ('type', '=', 'out_invoice')
                     ], limit=1, order='invoice_date_due desc')
-                    
+
                     if last_invoice:
                         last_invoice._send_whatsapp_notification(
                             'rent_debt_collection.wa_template_rent_debt_unblocked'
