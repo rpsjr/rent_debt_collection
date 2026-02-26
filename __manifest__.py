@@ -5,7 +5,7 @@
     'name': 'Rent Debt Collection',
     'description': """
         Rental tenant debt collection actions""",
-    'version': '13.0.1.1.0',
+    'version': '13.0.1.2.0',
     'license': 'AGPL-3',
     'author': 'Babur Ltda.',
     'website': 'babur.com.br',
