@@ -49,18 +49,24 @@ class AccountMove(models.Model):
             record.payment_url = record._get_payment_url()
 
     def _compute_pix_copy_code(self):
-        """Determines the PIX copy-paste code to be sent in notifications."""
+        """Determines the PIX copy-paste code to be sent in notifications.
+
+        The returned value already includes the "PIX:" prefix so the template
+        can simply render the field without conditional logic.
+        """
         for rec in self:
             code = ''
-            # if any related transaction carries the information, use the first one
+            # check related transactions first
             for tx in rec.transaction_ids:
                 if hasattr(tx, 'pix_copy_code') and tx.pix_copy_code:
                     code = tx.pix_copy_code
                     break
-            # fallback: check a system parameter for a default pattern
             if not code:
                 code = self.env['ir.config_parameter'].sudo().get_param('fleet.default_pix_copy_code', default='')
-            rec.pix_copy_code = code
+            if code:
+                rec.pix_copy_code = f"PIX: {code}"
+            else:
+                rec.pix_copy_code = ''
 
     def _send_whatsapp_notification(self, template_xml_id, sms_fallback_xml_id=False):
         """
