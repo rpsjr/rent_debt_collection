@@ -13,6 +13,132 @@ class AccountMove(models.Model):
 
     payment_promise = fields.Datetime(string='Payment Promise', help="Date and time of payment promise")
 
+    def _get_payment_url(self):
+        self.ensure_one()
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        return "{}/my/invoices/{}".format(base_url, self.id)
+
+    payment_url = fields.Char(string='Payment URL', compute='_compute_payment_url')
+
+    def _compute_payment_url(self):
+        for record in self:
+            record.payment_url = record._get_payment_url()
+
+    def _send_whatsapp_notification(self, template_xml_id, sms_fallback_xml_id=False):
+        """
+        Envia notificação via WhatsApp. Se falhar, tenta SMS.
+        """
+        self.ensure_one()
+        
+        # 1. Tenta enviar WhatsApp
+        try:
+            template = self.env.ref(template_xml_id, raise_if_not_found=False)
+            if template:
+                # Busca telefone móvel
+                phone = self.partner_id.mobile or self.partner_id.phone
+                
+                wa_msg = self.env['whatsapp.message'].create({
+                    'template_id': template.id,
+                    'partner_id': self.partner_id.id,
+                    'mobile_number': phone,
+                    'res_model': 'account.move',
+                    'res_id': self.id,
+                })
+                wa_msg.action_send()
+                
+                if wa_msg.status == 'sent':
+                    _logger.info("WhatsApp enviado com sucesso para %s (Template: %s)" % (self.partner_id.name, template_xml_id))
+                    return True
+                else:
+                    _logger.warning("Falha no envio de WhatsApp para %s. Status: %s. Reason: %s" % (self.partner_id.name, wa_msg.status, wa_msg.failure_reason))
+            else:
+                _logger.error("Template WhatsApp não encontrado: %s" % template_xml_id)
+
+        except Exception as e:
+            _logger.exception("Erro ao tentar enviar WhatsApp: %s" % e)
+
+        # 2. Fallback para SMS
+        if sms_fallback_xml_id:
+            _logger.info("Tentando fallback via SMS para %s (Template: %s)" % (self.partner_id.name, sms_fallback_xml_id))
+            try:
+                sms_template = self.env.ref(sms_fallback_xml_id, raise_if_not_found=False)
+                if sms_template:
+                    sms_template.send_sms([self.id], force_send=True)
+                    return True
+            except Exception as e:
+                _logger.exception("Erro no fallback de SMS: %s" % e)
+        
+        return False
+
+    def _do_whatsapp_reminder(self):
+        """
+        Job CRON diário para enviar avisos de bloqueio iminente (24h antes).
+        """
+        today = fields.Date.context_today(self)
+        
+        # Busca todas as faturas em aberto (vencidas ou vencendo hoje)
+        # Otimização: filtrar apenas as que podem gerar aviso (vencimento <= hoje)
+        moves = self.search([
+            ('type', '=', 'out_invoice'),
+            ('state', '=', 'posted'),
+            ('invoice_payment_state', '=', 'not_paid'),
+            ('invoice_date_due', '<=', today)
+        ])
+        
+        cal = Brazil()
+        ICP = self.env['ir.config_parameter'].sudo()
+        default_tolerance = int(ICP.get_param('fleet.block_tolerance_days', default=2))
+
+        for move in moves:
+            try:
+                # Verifica promessa de pagamento
+                if move._active_payment_promise():
+                    continue
+
+                is_recidivist = move._is_recidivist()
+                tolerance_days = 0 if is_recidivist else default_tolerance
+                
+                # Calcula dias de atraso úteis
+                days_overdue = 0
+                check_date = today
+                while check_date > move.invoice_date_due:
+                    if cal.is_working_day(check_date):
+                        days_overdue += 1
+                    check_date -= timedelta(days=1)
+                
+                # Lógica de Disparo: Aviso de Bloqueio em 24h
+                # O bloqueio ocorre quando days_overdue > tolerance_days.
+                # Então o aviso deve ocorrer quando days_overdue == tolerance_days.
+                
+                # Exemplo Reincidente (Tol=0):
+                # Vencimento Hoje (D+0) -> days_overdue = 0.
+                # Bloqueio Amanhã (D+1) -> days_overdue = 1 ( > 0).
+                # Aviso HOJE (D+0).
+                
+                # Exemplo Bom Pagador (Tol=2):
+                # Vencimento (D+0).
+                # Atraso 1 (D+1).
+                # Atraso 2 (D+2) -> days_overdue = 2.
+                # Bloqueio Amanhã (D+3) -> days_overdue = 3 ( > 2).
+                # Aviso HOJE (D+2).
+
+                should_warn = (days_overdue == tolerance_days)
+                
+                if should_warn:
+                    # Template: rent_debt_warning_24h
+                    # Fallback SMS: Escolher o template adequado baseado no perfil
+                    # Reincidente (Tol=0): Envio D+0 -> Bloqueio D+1. Fallback: "Vence hoje... bloqueio amanhã"
+                    # Bom Pagador (Tol=2): Envio D+2 -> Bloqueio D+3. Fallback: "Ultimo aviso... bloqueio"
+                    sms_fallback = 'rent_debt_collection.sms_template_data_invoice_due_date_bad' if is_recidivist else 'rent_debt_collection.sms_template_data_invoice_overdue_2_good'
+                    
+                    move._send_whatsapp_notification(
+                        'rent_debt_collection.wa_template_rent_debt_warning_24h',
+                        sms_fallback_xml_id=sms_fallback
+                    )
+                    
+            except Exception as e:
+                _logger.exception("Erro ao processar lembrete WhatsApp para fatura %s: %s" % (move.id, e))
+
     def _active_payment_promise(self):
         """Retorna True se houver uma promessa de pagamento válida no futuro."""
         return self.payment_promise and self.payment_promise > fields.Datetime.now()
@@ -234,6 +360,12 @@ class AccountMove(models.Model):
                     ) % (vehicle.license_plate, tolerance_days)
                     self.message_post(body=msg_move)
 
+                    # Envia Notificação de Bloqueio (WhatsApp / SMS)
+                    self._send_whatsapp_notification(
+                        'rent_debt_collection.wa_template_rent_debt_blocked',
+                        sms_fallback_xml_id='rent_debt_collection.sms_template_data_invoice_overdue_blocked'
+                    )
+
             except Exception as e:
                 _logger.error(f"Erro ao bloquear veículo {vehicle.license_plate} (Fatura {self.id}): {e}")
 
@@ -317,6 +449,19 @@ class AccountMove(models.Model):
                     vehicle.tracker_device.resume_engine()
                     
                     vehicle.message_post(body=_("Veículo desbloqueado automaticamente: Pendências financeiras regularizadas."))
+                    
+                    # Notificação de Desbloqueio
+                    # Busca a fatura mais recente para usar como contexto de envio
+                    last_invoice = self.env['account.move'].search([
+                        ('partner_id', '=', driver.id),
+                        ('type', '=', 'out_invoice')
+                    ], limit=1, order='invoice_date_due desc')
+                    
+                    if last_invoice:
+                        last_invoice._send_whatsapp_notification(
+                            'rent_debt_collection.wa_template_rent_debt_unblocked'
+                        )
+
                     self.env.cr.commit()
                 except Exception as e:
                     self.env.cr.rollback()

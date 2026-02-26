@@ -13,12 +13,16 @@
         'base',
         'account',
         'fleet',
-        'sms'
+        'sms',
+        'meta_whatsapp',
+        'mail_broker_whatsapp',
+        'payment_boletointer',
     ],
     'data': [
         'views/fleet_settings.xml',
         'views/account_move.xml',
         "data/sms_data.xml",
+        "data/whatsapp_data.xml",
         "data/rent_debt_collection_cron.xml",
         "security/ir.model.access.csv",
         "security/sms_security.xml",

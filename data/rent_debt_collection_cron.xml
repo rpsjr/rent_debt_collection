@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
   <record id="send_sms_invoice_alert" model="ir.cron">
-    <field name="name">SMS: Rent Invoice Due Alerts</field>
+    <field name="name">WhatsApp: Rent Invoice Due Alerts</field>
     <field name="state">code</field>
-    <field name="code">model._do_sms_reminder()</field>
+    <field name="code">model._do_whatsapp_reminder()</field>
     <field name="interval_number">1</field>
     <field name="interval_type">days</field>
     <field name="numbercall">-1</field>
-    <field name="nextcall" eval="(DateTime.now().replace(hour=12, minute=0) + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')" />
+    <field name="nextcall" eval="(DateTime.now().replace(hour=8, minute=0) + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')" />
     <field name="doall" eval="False" />
     <field name="model_id" ref="model_account_move"/>
   </record>
@@ -21,7 +21,7 @@
     <field name="doall" eval="False" />
     <field name="model_id" ref="model_account_move"/>
   </record>
-  
+
   <record id="unlock_vehicle_clean_record" model="ir.cron">
     <field name="name">Rent Debt Collect: Unlock Vehicles</field>
     <field name="state">code</field>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Template: Aviso de Bloqueio em 24h
+            Uso: Enviar para Reincidentes no dia do vencimento (D+0)
+                 Enviar para Bons Pagadores no dia final da tolerância (ex: D+2)
+        -->
+        <record id="wa_template_rent_debt_warning_24h" model="whatsapp.template">
+            <field name="name">rent_debt_warning_24h</field>
+            <field name="language">pt_BR</field>
+            <field name="body">Olá {{1}}! Identificamos pendência na fatura {{2}}. O bloqueio do veículo ocorrerá em 24h. Pague agora para evitar transtornos: {{3}}</field>
+            <field name="variable_ids" eval="[(0, 0, {'sequence': 1, 'field_name': 'partner_id.name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'sequence': 2, 'field_name': 'name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'sequence': 3, 'field_name': 'payment_url', 'field_type': 'field', 'location': 'body'})]"/>
+        </record>
+
+        <!--
+            Template: Veículo Bloqueado
+            Uso: Enviar imediatamente após o comando de bloqueio
+        -->
+        <record id="wa_template_rent_debt_blocked" model="whatsapp.template">
+            <field name="name">rent_debt_blocked</field>
+            <field name="language">pt_BR</field>
+            <field name="body">Seu veículo foi bloqueado por falta de pagamento da fatura {{1}}. Regularize agora para desbloqueio imediato: {{2}}</field>
+            <field name="variable_ids" eval="[(0, 0, {'sequence': 1, 'field_name': 'name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'sequence': 2, 'field_name': 'payment_url', 'field_type': 'field', 'location': 'body'})]"/>
+        </record>
+
+        <!--
+            Template: Veículo Desbloqueado
+            Uso: Enviar imediatamente após o comando de desbloqueio
+        -->
+        <record id="wa_template_rent_debt_unblocked" model="whatsapp.template">
+            <field name="name">rent_debt_unblocked</field>
+            <field name="language">pt_BR</field>
+            <field name="body">Pagamento confirmado! O veículo foi desbloqueado. Obrigado.</field>
+            <field name="variable_ids" eval="[]"/>
+        </record>
+    </data>
+</odoo>
