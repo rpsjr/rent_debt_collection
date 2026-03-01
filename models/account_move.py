@@ -38,19 +38,21 @@ class AccountMove(models.Model):
         # standard portal link with access token so external users don't need to log in
         return f"{base_url}/my/invoices/{self.id}?access_token={self.access_token}"
 
-    payment_url = fields.Char(string='Payment URL', compute='_compute_payment_url')
+    payment_url = fields.Char(string='Payment URL', compute='_compute_payment_url', store=True)
 
     pix_copy_code = fields.Text(string='PIX Copy & Paste Code', compute='_compute_pix_copy_code', store=True)
 
     # Helper fields for WhatsApp templates to avoid TypeError: can only concatenate str (not "bool") to str
-    wa_partner_name = fields.Char(compute='_compute_wa_safe_fields')
-    wa_invoice_name = fields.Char(compute='_compute_wa_safe_fields')
+    wa_partner_name = fields.Char(compute='_compute_wa_safe_fields', store=True)
+    wa_invoice_name = fields.Char(compute='_compute_wa_safe_fields', store=True)
 
+    @api.depends('partner_id.name', 'name')
     def _compute_wa_safe_fields(self):
         for rec in self:
             rec.wa_partner_name = rec.partner_id.name or 'Cliente'
             rec.wa_invoice_name = rec.name or 'Fatura'
 
+    @api.depends('access_token')
     def _compute_payment_url(self):
         # ensure tokens exist for all records before computing
         self._ensure_access_token()
