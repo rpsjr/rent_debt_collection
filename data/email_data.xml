@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Template: Aviso de Bloqueio em 24h -->
+        <record id="email_template_rent_debt_warning_24h" model="mail.template">
+            <field name="name">Aviso de Bloqueio em 24h</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="subject">Aviso de Bloqueio em 24h - Fatura ${object.name}</field>
+            <field name="partner_to">${object.partner_id.id}</field>
+            <field name="body_html" type="html">
+                <div style="margin: 0px; padding: 0px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                    <p>Olá <strong>${object.partner_id.name}</strong>,</p>
+                    <p>Identificamos uma pendência na fatura <strong>${object.name}</strong>. O bloqueio do veículo ocorrerá em 24 horas caso o pagamento não seja confirmado.</p>
+                    <p>Pague agora para evitar transtornos:</p>
+                    <p><a href="${object.payment_url}" style="background-color: #875A7B; padding: 8px 16px; text-decoration: none; color: #fff; border-radius: 5px;">Acessar Fatura / Pagar</a></p>
+                    <p><strong>PIX Copia e Cola:</strong><br/>
+                    <code>${object.pix_copy_code}</code></p>
+                    <br/>
+                    <p>Obrigado,<br/>Equipe de Cobrança</p>
+                </div>
+            </field>
+        </record>
+
+        <!-- Template: Veículo Bloqueado -->
+        <record id="email_template_rent_debt_blocked" model="mail.template">
+            <field name="name">Veículo Bloqueado</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="subject">Veículo Bloqueado - Fatura ${object.name}</field>
+            <field name="partner_to">${object.partner_id.id}</field>
+            <field name="body_html" type="html">
+                <div style="margin: 0px; padding: 0px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                    <p>Prezado(a) <strong>${object.partner_id.name}</strong>,</p>
+                    <p>Seu veículo foi <strong>bloqueado</strong> devido ao atraso no pagamento da fatura <strong>${object.name}</strong>.</p>
+                    <p>Regularize seu débito agora para que o desbloqueio ocorra automaticamente em instantes:</p>
+                    <p><a href="${object.payment_url}" style="background-color: #d9534f; padding: 8px 16px; text-decoration: none; color: #fff; border-radius: 5px;">Pagar Agora</a></p>
+                    <p><strong>PIX Copia e Cola:</strong><br/>
+                    <code>${object.pix_copy_code}</code></p>
+                    <br/>
+                    <p>Atenciosamente.</p>
+                </div>
+            </field>
+        </record>
+
+        <!-- Template: Veículo Desbloqueado -->
+        <record id="email_template_rent_debt_unblocked" model="mail.template">
+            <field name="name">Veículo Desbloqueado</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="subject">Veículo Desbloqueado - Pagamento Confirmado</field>
+            <field name="partner_to">${object.partner_id.id}</field>
+            <field name="body_html" type="html">
+                <div style="margin: 0px; padding: 0px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                    <p>Olá <strong>${object.partner_id.name}</strong>,</p>
+                    <p>Seu pagamento foi confirmado com sucesso!</p>
+                    <p>O comando de <strong>desbloqueio</strong> foi enviado para o seu veículo e ele estará liberado para uso em instantes.</p>
+                    <br/>
+                    <p>Obrigado pela regularização e boa viagem!</p>
+                </div>
+            </field>
+        </record>
+    </data>
+</odoo>

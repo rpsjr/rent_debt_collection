@@ -40,7 +40,7 @@ class AccountMove(models.Model):
 
     payment_url = fields.Char(string='Payment URL', compute='_compute_payment_url')
 
-    pix_copy_code = fields.Char(string='PIX Copy & Paste Code', compute='_compute_pix_copy_code')
+    pix_copy_code = fields.Text(string='PIX Copy & Paste Code', compute='_compute_pix_copy_code')
 
     def _compute_payment_url(self):
         # ensure tokens exist for all records before computing
@@ -51,8 +51,8 @@ class AccountMove(models.Model):
     def _compute_pix_copy_code(self):
         """Determines the PIX copy-paste code to be sent in notifications.
 
-        The returned value already includes the "PIX:" prefix so the template
-        can simply render the field without conditional logic.
+        The returned value is the raw BRCode so the user can easily copy it
+        to their bank app without any invalid prefixes like 'PIX:'.
         """
         for rec in self:
             code = ''
@@ -63,10 +63,25 @@ class AccountMove(models.Model):
                     break
             if not code:
                 code = self.env['ir.config_parameter'].sudo().get_param('fleet.default_pix_copy_code', default='')
-            if code:
-                rec.pix_copy_code = f"PIX: {code}"
-            else:
-                rec.pix_copy_code = ''
+
+            # The BRCode (PIX Copia e Cola) must be the exact raw string.
+            # Prefixes like "PIX: " make it invalid for bank apps.
+            rec.pix_copy_code = code or ''
+
+    def _send_email_notification(self, template_xml_id):
+        """
+        Envia redundância de notificação via e-mail.
+        """
+        self.ensure_one()
+        try:
+            template = self.env.ref(template_xml_id, raise_if_not_found=False)
+            if template and self.partner_id.email:
+                template.send_mail(self.id, force_send=True)
+                _logger.info("E-mail de redundância enviado para %s (Template: %s)" % (self.partner_id.name, template_xml_id))
+            elif not self.partner_id.email:
+                _logger.warning("Parceiro %s não possui e-mail cadastrado para redundância." % self.partner_id.name)
+        except Exception as e:
+            _logger.exception("Erro ao enviar e-mail de redundância: %s" % e)
 
     def _send_whatsapp_notification(self, template_xml_id, sms_fallback_xml_id=False):
         """
@@ -179,6 +194,7 @@ class AccountMove(models.Model):
                         'rent_debt_collection.wa_template_rent_debt_warning_24h',
                         sms_fallback_xml_id=sms_fallback
                     )
+                    move._send_email_notification('rent_debt_collection.email_template_rent_debt_warning_24h')
 
             except Exception as e:
                 _logger.exception("Erro ao processar lembrete WhatsApp para fatura %s: %s" % (move.id, e))
@@ -404,11 +420,12 @@ class AccountMove(models.Model):
                     ) % (vehicle.license_plate, tolerance_days)
                     self.message_post(body=msg_move)
 
-                    # Envia Notificação de Bloqueio (WhatsApp / SMS)
+                    # Envia Notificação de Bloqueio (WhatsApp / SMS / Email)
                     self._send_whatsapp_notification(
                         'rent_debt_collection.wa_template_rent_debt_blocked',
                         sms_fallback_xml_id='rent_debt_collection.sms_template_data_invoice_overdue_blocked'
                     )
+                    self._send_email_notification('rent_debt_collection.email_template_rent_debt_blocked')
 
             except Exception as e:
                 _logger.error(f"Erro ao bloquear veículo {vehicle.license_plate} (Fatura {self.id}): {e}")
@@ -505,6 +522,7 @@ class AccountMove(models.Model):
                         last_invoice._send_whatsapp_notification(
                             'rent_debt_collection.wa_template_rent_debt_unblocked'
                         )
+                        last_invoice._send_email_notification('rent_debt_collection.email_template_rent_debt_unblocked')
 
                     self.env.cr.commit()
                 except Exception as e:
