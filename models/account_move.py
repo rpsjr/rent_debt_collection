@@ -42,11 +42,21 @@ class AccountMove(models.Model):
 
     pix_copy_code = fields.Text(string='PIX Copy & Paste Code', compute='_compute_pix_copy_code', store=True)
 
+    # Helper fields for WhatsApp templates to avoid TypeError: can only concatenate str (not "bool") to str
+    wa_partner_name = fields.Char(compute='_compute_wa_safe_fields')
+    wa_invoice_name = fields.Char(compute='_compute_wa_safe_fields')
+
+    def _compute_wa_safe_fields(self):
+        for rec in self:
+            rec.wa_partner_name = rec.partner_id.name or ''
+            rec.wa_invoice_name = rec.name or ''
+
     def _compute_payment_url(self):
         # ensure tokens exist for all records before computing
         self._ensure_access_token()
         for record in self:
-            record.payment_url = record._get_payment_url()
+            # ensure it's always a string to avoid rendering issues in WhatsApp/SMS
+            record.payment_url = record._get_payment_url() or ''
 
     @api.depends('transaction_ids', 'transaction_ids.pix_copy_code')
     def _compute_pix_copy_code(self):
@@ -67,7 +77,8 @@ class AccountMove(models.Model):
 
             # The BRCode (PIX Copia e Cola) must be the exact raw string.
             # Prefixes like "PIX: " make it invalid for bank apps.
-            rec.pix_copy_code = code or ''
+            # Ensure it's never False to avoid TypeError in string concatenation
+            rec.pix_copy_code = str(code or '')
 
     def _send_email_notification(self, template_xml_id):
         """
