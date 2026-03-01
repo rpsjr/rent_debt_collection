@@ -58,7 +58,7 @@ class AccountMove(models.Model):
             # ensure it's always a string to avoid rendering issues in WhatsApp/SMS
             record.payment_url = record._get_payment_url() or 'URL Indisponível'
 
-    @api.depends('transaction_ids', 'transaction_ids.pix_copy_code')
+    @api.depends('transaction_ids', 'transaction_ids.boleto_pix_code')
     def _compute_pix_copy_code(self):
         """Determines the PIX copy-paste code to be sent in notifications.
 
@@ -69,6 +69,11 @@ class AccountMove(models.Model):
             code = ''
             # check related transactions first
             for tx in rec.transaction_ids:
+                # Check Boleto Inter field
+                if hasattr(tx, 'boleto_pix_code') and tx.boleto_pix_code:
+                    code = tx.boleto_pix_code
+                    break
+                # Fallback for other providers
                 if hasattr(tx, 'pix_copy_code') and tx.pix_copy_code:
                     code = tx.pix_copy_code
                     break
