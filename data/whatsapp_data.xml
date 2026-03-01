@@ -10,7 +10,7 @@
             <field name="name">rent_debt_warning_24h</field>
             <field name="model_id" ref="account.model_account_move"/>
             <field name="language">pt_BR</field>
-            <field name="body">Olá {{1}}! Identificamos pendência na fatura {{2}}. O bloqueio do veículo ocorrerá em 24h. Pague agora para evitar transtornos: {{3}} 
+            <field name="body">Olá {{1}}! Identificamos pendência na fatura {{2}}. O bloqueio do veículo ocorrerá em 24h. Pague agora para evitar transtornos: {{3}}
 
 PIX Copia e Cola:
 {{4}}
@@ -27,7 +27,7 @@ Obrigado.</field>
             <field name="model_id" ref="account.model_account_move"/>
             <field name="name">rent_debt_blocked</field>
             <field name="language">pt_BR</field>
-            <field name="body">Seu veículo foi bloqueado por falta de pagamento da fatura {{1}}. Regularize agora para desbloqueio imediato: {{2}} 
+            <field name="body">Seu veículo foi bloqueado por falta de pagamento da fatura {{1}}. Regularize agora para desbloqueio imediato: {{2}}
 
 PIX Copia e Cola:
 {{3}}

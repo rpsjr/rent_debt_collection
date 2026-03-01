@@ -48,15 +48,15 @@ class AccountMove(models.Model):
 
     def _compute_wa_safe_fields(self):
         for rec in self:
-            rec.wa_partner_name = rec.partner_id.name or ''
-            rec.wa_invoice_name = rec.name or ''
+            rec.wa_partner_name = rec.partner_id.name or 'Cliente'
+            rec.wa_invoice_name = rec.name or 'Fatura'
 
     def _compute_payment_url(self):
         # ensure tokens exist for all records before computing
         self._ensure_access_token()
         for record in self:
             # ensure it's always a string to avoid rendering issues in WhatsApp/SMS
-            record.payment_url = record._get_payment_url() or ''
+            record.payment_url = record._get_payment_url() or 'URL Indisponível'
 
     @api.depends('transaction_ids', 'transaction_ids.pix_copy_code')
     def _compute_pix_copy_code(self):
@@ -78,7 +78,8 @@ class AccountMove(models.Model):
             # The BRCode (PIX Copia e Cola) must be the exact raw string.
             # Prefixes like "PIX: " make it invalid for bank apps.
             # Ensure it's never False to avoid TypeError in string concatenation
-            rec.pix_copy_code = str(code or '')
+            # WhatsApp API may reject empty parameters, so provide a placeholder if empty
+            rec.pix_copy_code = str(code or 'PIX indisponível')
 
     def _send_email_notification(self, template_xml_id):
         """
@@ -107,14 +108,19 @@ class AccountMove(models.Model):
             if template:
                 # Busca telefone móvel
                 phone = self.partner_id.mobile or self.partner_id.phone
+                if not phone:
+                    _logger.warning("WhatsApp: Telefone não encontrado para parceiro %s", self.partner_id.name)
+                    return False
 
                 # Alguns módulos de WhatsApp (como o meta_whatsapp) usam safe_eval('active_ids')
                 # em seus wizards. Precisamos garantir que active_ids esteja no contexto.
+                # Também garantimos que o idioma correto seja passado.
                 ctx = self.env.context.copy()
                 ctx.update({
                     'active_model': 'account.move',
                     'active_id': self.id,
                     'active_ids': [self.id],
+                    'lang': template.language or self.partner_id.lang or 'pt_BR',
                 })
 
                 wa_msg = self.env['whatsapp.message'].with_context(ctx).create({
