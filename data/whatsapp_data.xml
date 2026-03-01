@@ -16,7 +16,7 @@ PIX Copia e Cola:
 {{4}}
 
 Obrigado.</field>
-            <field name="variable_ids" eval="[(0, 0, {'name': '1', 'sequence': 1, 'field_name': 'wa_partner_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '2', 'sequence': 2, 'field_name': 'wa_invoice_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '3', 'sequence': 3, 'field_name': 'payment_url', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '4', 'sequence': 4, 'field_name': 'pix_copy_code', 'field_type': 'field', 'location': 'body'})]"/>
+            <field name="variable_ids" eval="[(0, 0, {'name': '{{1}}', 'sequence': 1, 'field_name': 'wa_partner_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{2}}', 'sequence': 2, 'field_name': 'wa_invoice_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{3}}', 'sequence': 3, 'field_name': 'payment_url', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{4}}', 'sequence': 4, 'field_name': 'pix_copy_code', 'field_type': 'field', 'location': 'body'})]"/>
         </record>
 
         <!--
@@ -33,7 +33,7 @@ PIX Copia e Cola:
 {{3}}
 
 Obrigado.</field>
-            <field name="variable_ids" eval="[(0, 0, {'name': '1', 'sequence': 1, 'field_name': 'wa_invoice_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '2', 'sequence': 2, 'field_name': 'payment_url', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '3', 'sequence': 3, 'field_name': 'pix_copy_code', 'field_type': 'field', 'location': 'body'})]"/>
+            <field name="variable_ids" eval="[(0, 0, {'name': '{{1}}', 'sequence': 1, 'field_name': 'wa_invoice_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{2}}', 'sequence': 2, 'field_name': 'payment_url', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{3}}', 'sequence': 3, 'field_name': 'pix_copy_code', 'field_type': 'field', 'location': 'body'})]"/>
         </record>
 
         <!--

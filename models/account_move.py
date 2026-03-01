@@ -122,7 +122,7 @@ class AccountMove(models.Model):
                 # Sanitização: A API da Meta espera apenas dígitos (ex: 5511999999999)
                 # Remove espaços, traços, parênteses e o sinal de +
                 phone = "".join(filter(str.isdigit, phone))
-                
+
                 # Se o número tiver 10 ou 11 dígitos, adiciona o DDI (55)
                 if 10 <= len(phone) <= 11:
                     phone = "55" + phone
