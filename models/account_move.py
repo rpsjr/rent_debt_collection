@@ -119,6 +119,14 @@ class AccountMove(models.Model):
                     _logger.warning("WhatsApp: Telefone não encontrado para parceiro %s", self.partner_id.name)
                     return False
 
+                # Sanitização: A API da Meta espera apenas dígitos (ex: 5511999999999)
+                # Remove espaços, traços, parênteses e o sinal de +
+                phone = "".join(filter(str.isdigit, phone))
+                
+                # Se o número tiver 10 ou 11 dígitos, adiciona o DDI (55)
+                if 10 <= len(phone) <= 11:
+                    phone = "55" + phone
+
                 # Alguns módulos de WhatsApp (como o meta_whatsapp) usam safe_eval('active_ids')
                 # em seus wizards. Precisamos garantir que active_ids esteja no contexto.
                 # Também garantimos que o idioma correto seja passado.
