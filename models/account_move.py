@@ -97,20 +97,30 @@ class AccountMove(models.Model):
                 # Busca telefone móvel
                 phone = self.partner_id.mobile or self.partner_id.phone
 
-                wa_msg = self.env['whatsapp.message'].create({
+                # Alguns módulos de WhatsApp (como o meta_whatsapp) usam safe_eval('active_ids')
+                # em seus wizards. Precisamos garantir que active_ids esteja no contexto.
+                ctx = self.env.context.copy()
+                ctx.update({
+                    'active_model': 'account.move',
+                    'active_id': self.id,
+                    'active_ids': [self.id],
+                })
+
+                wa_msg = self.env['whatsapp.message'].with_context(ctx).create({
                     'template_id': template.id,
                     'partner_id': self.partner_id.id,
                     'mobile_number': phone,
                     'res_model': 'account.move',
                     'res_id': self.id,
                 })
-                wa_msg.action_send()
 
-                if wa_msg.status == 'sent':
-                    _logger.info("WhatsApp enviado com sucesso para %s (Template: %s)" % (self.partner_id.name, template_xml_id))
-                    return True
+                if hasattr(wa_msg, 'send_whatsapp'):
+                    wa_msg.with_context(ctx).send_whatsapp()
                 else:
-                    _logger.warning("Falha no envio de WhatsApp para %s. Status: %s. Reason: %s" % (self.partner_id.name, wa_msg.status, wa_msg.failure_reason))
+                    wa_msg.with_context(ctx).action_send()
+
+                _logger.info("WhatsApp processado para %s (Template: %s)" % (self.partner_id.name, template_xml_id))
+                return True
             else:
                 _logger.error("Template WhatsApp não encontrado: %s" % template_xml_id)
 
