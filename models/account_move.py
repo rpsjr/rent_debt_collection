@@ -113,6 +113,15 @@ class AccountMove(models.Model):
         try:
             template = self.env.ref(template_xml_id, raise_if_not_found=False)
             if template:
+                # Ensure computed fields are ready for the template variables
+                # This fixes issues where fields might be empty for old records
+                if not self.wa_partner_name or not self.wa_invoice_name:
+                    self._compute_wa_safe_fields()
+                if not self.payment_url:
+                    self._compute_payment_url()
+                if not self.pix_copy_code:
+                    self._compute_pix_copy_code()
+
                 # Busca telefone móvel
                 phone = self.partner_id.mobile or self.partner_id.phone
                 if not phone:
