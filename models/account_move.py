@@ -40,7 +40,7 @@ class AccountMove(models.Model):
 
     payment_url = fields.Char(string='Payment URL', compute='_compute_payment_url')
 
-    pix_copy_code = fields.Text(string='PIX Copy & Paste Code', compute='_compute_pix_copy_code')
+    pix_copy_code = fields.Text(string='PIX Copy & Paste Code', compute='_compute_pix_copy_code', store=True)
 
     def _compute_payment_url(self):
         # ensure tokens exist for all records before computing
@@ -48,6 +48,7 @@ class AccountMove(models.Model):
         for record in self:
             record.payment_url = record._get_payment_url()
 
+    @api.depends('transaction_ids', 'transaction_ids.pix_copy_code')
     def _compute_pix_copy_code(self):
         """Determines the PIX copy-paste code to be sent in notifications.
 

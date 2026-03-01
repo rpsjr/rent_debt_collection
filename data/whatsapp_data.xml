@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <data noupdate="1">
+    <data noupdate="0">
         <!--
             Template: Aviso de Bloqueio em 24h
             Uso: Enviar para Reincidentes no dia do vencimento (D+0)
