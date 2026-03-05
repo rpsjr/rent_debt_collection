@@ -45,12 +45,26 @@ class AccountMove(models.Model):
     # Helper fields for WhatsApp templates to avoid TypeError: can only concatenate str (not "bool") to str
     wa_partner_name = fields.Char(compute='_compute_wa_safe_fields', store=True)
     wa_invoice_name = fields.Char(compute='_compute_wa_safe_fields', store=True)
+    wa_url_suffix = fields.Char(compute='_compute_wa_url_suffix', store=True)
 
     @api.depends('partner_id.name', 'name')
     def _compute_wa_safe_fields(self):
         for rec in self:
             rec.wa_partner_name = rec.partner_id.name or 'Cliente'
             rec.wa_invoice_name = rec.name or 'Fatura'
+
+    @api.depends('access_token')
+    def _compute_wa_url_suffix(self):
+        """
+        Computes the suffix for dynamic URL buttons in WhatsApp templates.
+        Format: {id}?access_token={token}
+        """
+        for rec in self:
+            rec._ensure_access_token()
+            if rec.id and rec.access_token:
+                rec.wa_url_suffix = f"{rec.id}?access_token={rec.access_token}"
+            else:
+                rec.wa_url_suffix = ""
 
     @api.depends('access_token')
     def _compute_payment_url(self):
@@ -121,6 +135,8 @@ class AccountMove(models.Model):
                     self._compute_payment_url()
                 if not self.pix_copy_code:
                     self._compute_pix_copy_code()
+                if not self.wa_url_suffix:
+                    self._compute_wa_url_suffix()
 
                 # Busca telefone móvel
                 phone = self.partner_id.mobile or self.partner_id.phone
@@ -242,11 +258,19 @@ class AccountMove(models.Model):
                     # Bom Pagador (Tol=2): Envio D+2 -> Bloqueio D+3. Fallback: "Ultimo aviso... bloqueio"
                     sms_fallback = 'rent_debt_collection.sms_template_data_invoice_due_date_bad' if is_recidivist else 'rent_debt_collection.sms_template_data_invoice_overdue_2_good'
 
+                    # Select WhatsApp and Email templates based on recidivism
+                    if is_recidivist:
+                        wa_template_xml_id = 'rent_debt_collection.wa_template_aviso_vencimento_reincidente_bloqueio_24h'
+                        email_template_xml_id = 'rent_debt_collection.email_template_aviso_vencimento_reincidente_bloqueio_24h'
+                    else:
+                        wa_template_xml_id = 'rent_debt_collection.wa_template_aviso_atraso_bloqueio_24h'
+                        email_template_xml_id = 'rent_debt_collection.email_template_aviso_atraso_bloqueio_24h'
+
                     move._send_whatsapp_notification(
-                        'rent_debt_collection.wa_template_rent_debt_warning_24h',
+                        wa_template_xml_id,
                         sms_fallback_xml_id=sms_fallback
                     )
-                    move._send_email_notification('rent_debt_collection.email_template_rent_debt_warning_24h')
+                    move._send_email_notification(email_template_xml_id)
 
             except Exception as e:
                 _logger.exception("Erro ao processar lembrete WhatsApp para fatura %s: %s" % (move.id, e))
@@ -474,10 +498,10 @@ class AccountMove(models.Model):
 
                     # Envia Notificação de Bloqueio (WhatsApp / SMS / Email)
                     self._send_whatsapp_notification(
-                        'rent_debt_collection.wa_template_rent_debt_blocked',
+                        'rent_debt_collection.wa_template_aviso_bloqueio_efetuado',
                         sms_fallback_xml_id='rent_debt_collection.sms_template_data_invoice_overdue_blocked'
                     )
-                    self._send_email_notification('rent_debt_collection.email_template_rent_debt_blocked')
+                    self._send_email_notification('rent_debt_collection.email_template_aviso_bloqueio_efetuado')
 
             except Exception as e:
                 _logger.error(f"Erro ao bloquear veículo {vehicle.license_plate} (Fatura {self.id}): {e}")
@@ -572,9 +596,9 @@ class AccountMove(models.Model):
 
                     if last_invoice:
                         last_invoice._send_whatsapp_notification(
-                            'rent_debt_collection.wa_template_rent_debt_unblocked'
+                            'rent_debt_collection.wa_template_aviso_desbloqueio_solicitado'
                         )
-                        last_invoice._send_email_notification('rent_debt_collection.email_template_rent_debt_unblocked')
+                        last_invoice._send_email_notification('rent_debt_collection.email_template_aviso_desbloqueio_solicitado')
 
                     self.env.cr.commit()
                 except Exception as e:

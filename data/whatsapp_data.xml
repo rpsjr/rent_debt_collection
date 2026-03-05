@@ -1,51 +1,180 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="0">
-        <!--
-            Template: Aviso de Bloqueio em 24h
-            Uso: Enviar para Reincidentes no dia do vencimento (D+0)
-                 Enviar para Bons Pagadores no dia final da tolerância (ex: D+2)
+        <!-- 
+            Template 1: Aviso de Atraso - Bloqueio em 24h 
+            Uso: Faturas atrasadas que causarão bloqueio em 24h (Padrão)
         -->
-        <record id="wa_template_rent_debt_warning_24h" model="whatsapp.template">
-            <field name="name">rent_debt_warning_24h</field>
+        <record id="wa_template_aviso_atraso_bloqueio_24h" model="whatsapp.template">
+            <field name="name">aviso_atraso_bloqueio_24h</field>
             <field name="model_id" ref="account.model_account_move"/>
             <field name="language">pt_BR</field>
-            <field name="body">Olá {{1}}! Identificamos pendência na fatura {{2}}. O bloqueio do veículo ocorrerá em 24h. Pague agora para evitar transtornos: {{3}}
+            <field name="header_type">TEXT</field>
+            <field name="header_text">Olá {{1}}</field>
+            <field name="body">Identificamos pendência na fatura {{1}}.
 
-PIX Copia e Cola:
-{{4}}
+O bloqueio do veículo ocorrerá em 24h.
 
-Obrigado.</field>
-            <field name="variable_ids" eval="[(5, 0, 0), (0, 0, {'name': '{{1}}', 'sequence': 1, 'field_name': 'wa_partner_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{2}}', 'sequence': 2, 'field_name': 'wa_invoice_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{3}}', 'sequence': 3, 'field_name': 'payment_url', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{4}}', 'sequence': 4, 'field_name': 'pix_copy_code', 'field_type': 'field', 'location': 'body'})]"/>
+Pague agora para evitar transtornos.</field>
+            <field name="footer_text">Babur Rent</field>
         </record>
 
-        <!--
-            Template: Veículo Bloqueado
-            Uso: Enviar imediatamente após o comando de bloqueio
+        <!-- Variables for Template 1 -->
+        <record id="wa_var_atraso_header" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_atraso_bloqueio_24h"/>
+            <field name="name">{{1}}</field>
+            <field name="location">header</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_partner_name</field>
+        </record>
+        
+        <record id="wa_var_atraso_body" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_atraso_bloqueio_24h"/>
+            <field name="name">{{1}}</field>
+            <field name="location">body</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_invoice_name</field>
+        </record>
+
+        <!-- Button for Template 1 -->
+        <record id="wa_btn_atraso" model="whatsapp.template.button">
+            <field name="template_id" ref="wa_template_aviso_atraso_bloqueio_24h"/>
+            <field name="sequence">1</field>
+            <field name="type">URL</field>
+            <field name="url_type">DYNAMIC</field>
+            <field name="website_url">https://babur.com.br/my/invoices/{{1}}</field>
+            <field name="text">VER FATURA</field>
+        </record>
+
+        <record id="wa_var_atraso_btn" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_atraso_bloqueio_24h"/>
+            <field name="name">{{1}}</field>
+            <field name="location">button</field>
+            <field name="button_index">0</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_url_suffix</field>
+        </record>
+
+
+        <!-- 
+            Template 2: Aviso de Vencimento - Reincidente - Bloqueio em 24h 
+            Uso: Faturas vencendo hoje para reincidentes (Tol=0)
         -->
-        <record id="wa_template_rent_debt_blocked" model="whatsapp.template">
+        <record id="wa_template_aviso_vencimento_reincidente_bloqueio_24h" model="whatsapp.template">
+            <field name="name">aviso_vencimento_reincidente_bloqueio_24h</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="name">rent_debt_blocked</field>
             <field name="language">pt_BR</field>
-            <field name="body">Seu veículo foi bloqueado por falta de pagamento da fatura {{1}}. Regularize agora para desbloqueio imediato: {{2}}
+            <field name="header_type">TEXT</field>
+            <field name="header_text">Olá {{1}}</field>
+            <field name="body">Sua fatura {{1}} está vencendo.
 
-PIX Copia e Cola:
-{{3}}
+Caso não efetue o pagamento, o bloqueio do veículo ocorrerá em 24h.
 
-Obrigado.</field>
-            <field name="variable_ids" eval="[(5, 0, 0), (0, 0, {'name': '{{1}}', 'sequence': 1, 'field_name': 'wa_invoice_name', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{2}}', 'sequence': 2, 'field_name': 'payment_url', 'field_type': 'field', 'location': 'body'}), (0, 0, {'name': '{{3}}', 'sequence': 3, 'field_name': 'pix_copy_code', 'field_type': 'field', 'location': 'body'})]"/>
+Pague até o vencimento para evitar transtornos.</field>
+            <field name="footer_text">Babur Rent</field>
         </record>
 
-        <!--
-            Template: Veículo Desbloqueado
-            Uso: Enviar imediatamente após o comando de desbloqueio
+        <!-- Variables for Template 2 -->
+        <record id="wa_var_reincidente_header" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_vencimento_reincidente_bloqueio_24h"/>
+            <field name="name">{{1}}</field>
+            <field name="location">header</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_partner_name</field>
+        </record>
+
+        <record id="wa_var_reincidente_body" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_vencimento_reincidente_bloqueio_24h"/>
+            <field name="name">{{1}}</field>
+            <field name="location">body</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_invoice_name</field>
+        </record>
+
+        <!-- Button for Template 2 -->
+        <record id="wa_btn_reincidente" model="whatsapp.template.button">
+            <field name="template_id" ref="wa_template_aviso_vencimento_reincidente_bloqueio_24h"/>
+            <field name="sequence">1</field>
+            <field name="type">URL</field>
+            <field name="url_type">DYNAMIC</field>
+            <field name="website_url">https://babur.com.br/my/invoices/{{1}}</field>
+            <field name="text">VER FATURA</field>
+        </record>
+
+        <record id="wa_var_reincidente_btn" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_vencimento_reincidente_bloqueio_24h"/>
+            <field name="name">{{1}}</field>
+            <field name="location">button</field>
+            <field name="button_index">0</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_url_suffix</field>
+        </record>
+
+
+        <!-- 
+            Template 3: Aviso de Bloqueio Efetuado 
+            Uso: Veículo bloqueado
         -->
-        <record id="wa_template_rent_debt_unblocked" model="whatsapp.template">
+        <record id="wa_template_aviso_bloqueio_efetuado" model="whatsapp.template">
+            <field name="name">aviso_bloqueio_efetuado</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="name">rent_debt_unblocked</field>
+            <field name="language">pt_BR</field>
+            <field name="header_type">TEXT</field>
+            <field name="header_text">Olá {{1}}</field>
+            <field name="body">Seu veículo foi bloqueado por falta de pagamento da fatura {{1}}.
+
+Regularize agora para desbloqueio!!!</field>
+            <field name="footer_text">Babur Rent</field>
+        </record>
+
+        <!-- Variables for Template 3 -->
+        <record id="wa_var_blocked_header" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_bloqueio_efetuado"/>
+            <field name="name">{{1}}</field>
+            <field name="location">header</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_partner_name</field>
+        </record>
+
+        <record id="wa_var_blocked_body" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_bloqueio_efetuado"/>
+            <field name="name">{{1}}</field>
+            <field name="location">body</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_invoice_name</field>
+        </record>
+
+        <!-- Button for Template 3 -->
+        <record id="wa_btn_blocked" model="whatsapp.template.button">
+            <field name="template_id" ref="wa_template_aviso_bloqueio_efetuado"/>
+            <field name="sequence">1</field>
+            <field name="type">URL</field>
+            <field name="url_type">DYNAMIC</field>
+            <field name="website_url">https://babur.com.br/my/invoices/{{1}}</field>
+            <field name="text">VER FATURA</field>
+        </record>
+
+        <record id="wa_var_blocked_btn" model="whatsapp.template.variable">
+            <field name="template_id" ref="wa_template_aviso_bloqueio_efetuado"/>
+            <field name="name">{{1}}</field>
+            <field name="location">button</field>
+            <field name="button_index">0</field>
+            <field name="field_type">field</field>
+            <field name="field_name">wa_url_suffix</field>
+        </record>
+
+
+        <!-- 
+            Template 4: Aviso de Desbloqueio Solicitado 
+            Uso: Veículo desbloqueado
+        -->
+        <record id="wa_template_aviso_desbloqueio_solicitado" model="whatsapp.template">
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="name">aviso_desbloqueio_solicitado</field>
             <field name="language">pt_BR</field>
             <field name="body">Pagamento confirmado! O veículo foi desbloqueado. Obrigado.</field>
-            <field name="variable_ids" eval="[]"/>
+            <field name="header_type">NONE</field>
+            <!-- Sem botões, apenas texto informativo -->
         </record>
     </data>
 </odoo>
